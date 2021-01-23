@@ -19,7 +19,6 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew distZip distTar
       - name: Upload Release Asset
-        id: upload-release-asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -28,8 +27,7 @@ jobs:
           asset_path: ./build/distribution/autoapk2jar-${{ github.event.release.tag_name }}.zip
           asset_name: autoapk2jar-${{ github.event.release.tag_name }}.zip
           asset_content_type: application/zip
-      - name: Upload Release Asset
-        id: upload-release-asset
+      - name: Upload Release Asset2
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
