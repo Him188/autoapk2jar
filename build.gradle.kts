@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "me.him188"
-version = "1.0-SNAPSHOT"
+version = "0.1.0"
 
 repositories {
     mavenLocal()
@@ -24,7 +24,7 @@ tasks.test {
     useJUnit()
 }
 
-tasks.withType<KotlinCompile>() {
+tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "1.8"
 }
 
