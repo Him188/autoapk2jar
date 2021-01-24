@@ -4,6 +4,7 @@ import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 
 private object AutoApk2Jar
 
@@ -11,25 +12,44 @@ suspend fun main(args: Array<String>) {
     runCatching {
         impl(args)
     }.exceptionOrNull()?.printStackTrace()
+
+    println("Type anything to exit.")
     readLine()
 }
 
+private val isWindows by lazy {
+    System.getProperty("os.name").contains("windows", ignoreCase = true)
+}
+
+private const val DEX2JAR_THREAD_COUNT = 5
+
 suspend fun impl(args: Array<String>) {
+    val output = File(".").absoluteFile.parentFile.resolve("output").apply { mkdir() }
+
+    println("Working dir: ${output.absolutePath}")
+
     val apkFile = args.getOrElse(0) {
         println("path to the apk?")
         readLine() ?: error("Please provide apk path")
     }
 
-    val output = File("../output").apply { mkdir() }
     prepareDex2Jar(output)
 
     val apkUnzip = output.resolve("apkUnzip")
     println("Unzipping apk to $apkUnzip")
     runInterruptible { unzip(apkFile, apkUnzip.absolutePath, entryFilter = { it.substringAfterLast(".") == "dex" }) }
 
-    println("Starting dex2jar")
+    println("Starting dex2jar, thread count=$DEX2JAR_THREAD_COUNT, this may occupy 100% CPU")
     val jars = output.resolve("jars")
-    dex2Jar(output.resolve("dex2jar/d2j-dex2jar.bat"), apkUnzip, jars)
+
+    dex2Jar(
+        output.resolve(
+            if (isWindows) "dex2jar/d2j-dex2jar.bat"
+            else "dex2jar/d2j-dex2jar"
+        ),
+        apkUnzip,
+        jars
+    )
 
     println("Jars dumped to $jars")
 
@@ -53,9 +73,21 @@ suspend fun impl(args: Array<String>) {
         AutoApk2Jar::class.java.getResourceAsStream("fernflower.jar").use { it.copyTo(out) }
     }
 
-    val decompiled = output.resolve("decompiled").apply { mkdir() }
-    println("Decompiled classes: ${decompiled.absolutePath}")
-    println("Start FernFlower")
+    println("Preparing project template")
+
+    val projectTemplateZip = output.resolve("ProjectTemplate.zip")
+    projectTemplateZip.outputStream().use { out ->
+        AutoApk2Jar::class.java.getResourceAsStream("ProjectTemplate.zip").use { it.copyTo(out) }
+    }
+
+    val project = output.resolve(File(apkFile).nameWithoutExtension)
+    project.mkdir()
+    unzip(projectTemplateZip.absolutePath, project.absolutePath)
+
+
+    val decompiled = project.resolve("app/src/main/java").apply { mkdirs() }
+    println("Decompiled classes output: ${decompiled.absolutePath}")
+    println("Starting FernFlower. This may take a long time, please wait until 'Decompile finished.'")
 
     runInterruptible {
         ProcessBuilder().command("""
@@ -68,6 +100,8 @@ suspend fun impl(args: Array<String>) {
         "${decompiled.absolutePath}"
     """.trimIndent().replace('\n', ' ')).inheritIO().start().waitFor()
     }
+
+    println("Decompile finished. ")
 }
 
 fun prepareDex2Jar(output: File) {
@@ -81,8 +115,10 @@ fun prepareDex2Jar(output: File) {
 }
 
 suspend fun dex2Jar(dex2jar: File, input: File, output: File) = coroutineScope {
-    val semaphore = Semaphore(5)
-    input.walk().filter { it.extension == "dex" }.forEach { file ->
+    val semaphore = Semaphore(DEX2JAR_THREAD_COUNT)
+    val total = input.walk().filter { it.extension == "dex" }.toList()
+    val finished = AtomicInteger(0)
+    total.forEach { file ->
         val cmd = """
             "${dex2jar.absolutePath}"
              --force
@@ -93,6 +129,7 @@ suspend fun dex2Jar(dex2jar: File, input: File, output: File) = coroutineScope {
         launch {
             semaphore.withPermit {
                 runInterruptible { ProcessBuilder().command(cmd).start().waitFor() }
+                println("${file.name} done. ${finished.incrementAndGet().toDouble().div(total.size).times(100).toInt()}%")
             }
         }
     }
