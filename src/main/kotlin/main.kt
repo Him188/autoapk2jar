@@ -24,14 +24,20 @@ private val isWindows by lazy {
 private const val DEX2JAR_THREAD_COUNT = 5
 
 suspend fun impl(args: Array<String>) {
-    val output = File(".").absoluteFile.parentFile.resolve("output").apply { mkdir() }
-
-    println("Working dir: ${output.absolutePath}")
-
     val apkFile = args.getOrElse(0) {
         println("path to the apk?")
         readLine() ?: error("Please provide apk path")
     }
+
+    val defaultOutputDir = File(".").absoluteFile.parentFile.resolve("output")
+    val output = args.getOrElse(1) {
+        println("output dir? default: ${defaultOutputDir.absolutePath}")
+        readLine()
+    }.let { dir ->
+        (if (dir.isNullOrBlank()) defaultOutputDir else File(dir)).apply { mkdirs() }
+    }
+
+    println("Output dir: ${output.absolutePath}")
 
     prepareDex2Jar(output)
 
