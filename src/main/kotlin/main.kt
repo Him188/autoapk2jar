@@ -101,7 +101,7 @@ suspend fun impl(args: Array<String>) {
         -dgs=1 
         -log=ERROR 
         -lit=1 
-        -mpm=120 
+        -mpm=1800 
         "${classes.absolutePath}" 
         "${decompiled.absolutePath}"
     """.trimIndent().replace('\n', ' ')).inheritIO().start().waitFor()
