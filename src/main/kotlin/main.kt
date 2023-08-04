@@ -14,7 +14,7 @@ suspend fun main(args: Array<String>) {
     }.exceptionOrNull()?.printStackTrace()
 
     println("Type anything to exit.")
-    readLine()
+    readlnOrNull()
 }
 
 private val isWindows by lazy {
@@ -26,13 +26,13 @@ private const val DEX2JAR_THREAD_COUNT = 5
 suspend fun impl(args: Array<String>) {
     val apkFile = args.getOrElse(0) {
         println("path to the apk?")
-        readLine() ?: error("Please provide apk path")
+        readlnOrNull() ?: error("Please provide apk path")
     }
 
     val defaultOutputDir = File(".").absoluteFile.parentFile.resolve("output")
     val output = args.getOrElse(1) {
         println("output dir? default: ${defaultOutputDir.absolutePath}")
-        readLine()
+        readlnOrNull()
     }.let { dir ->
         (if (dir.isNullOrBlank()) defaultOutputDir else File(dir)).apply { mkdirs() }
     }
@@ -51,10 +51,8 @@ suspend fun impl(args: Array<String>) {
     dex2Jar(
         output.resolve(
             if (isWindows) "dex2jar/d2j-dex2jar.bat"
-            else "dex2jar/d2j-dex2jar"
-        ),
-        apkUnzip,
-        jars
+            else "dex2jar/d2j-dex2jar.sh"
+        ), apkUnzip, jars
     )
 
     println("Jars dumped to $jars")
@@ -96,15 +94,19 @@ suspend fun impl(args: Array<String>) {
     println("Starting FernFlower. This may take a long time, please wait until 'Decompile finished.'")
 
     runInterruptible {
-        ProcessBuilder().command("""
-        "java" -jar "${fernFlower.absolutePath}" 
-        -dgs=1 
-        -log=ERROR 
-        -lit=1 
-        -mpm=1800 
-        "${classes.absolutePath}" 
-        "${decompiled.absolutePath}"
-    """.trimIndent().replace('\n', ' ')).inheritIO().start().waitFor()
+        ProcessBuilder().command(
+            listOf(
+                "java",
+                "-jar",
+                fernFlower.absolutePath,
+                "-dgs=1",
+                "-log=ERROR",
+                "-lit=1",
+                "-mpm=1800",
+                classes.absolutePath,
+                decompiled.absolutePath
+            )
+        ).inheritIO().start().waitFor()
     }
 
     println("Decompile finished. ")
@@ -113,7 +115,7 @@ suspend fun impl(args: Array<String>) {
 fun prepareDex2Jar(output: File) {
     val outFile = output.resolve("dex2jar.zip")
     outFile.outputStream().use { out ->
-        AutoApk2Jar::class.java.getResourceAsStream("dex2jar.zip").use { it.copyTo(out) }
+        AutoApk2Jar::class.java.getResourceAsStream("dex2jar.zip")!!.use { it.copyTo(out) }
     }
 
     outFile.resolveSibling("dex2jar").mkdir()
@@ -124,13 +126,21 @@ suspend fun dex2Jar(dex2jar: File, input: File, output: File) = coroutineScope {
     val semaphore = Semaphore(DEX2JAR_THREAD_COUNT)
     val total = input.walk().filter { it.extension == "dex" }.toList()
     val finished = AtomicInteger(0)
+
+    if (!isWindows) {
+        ProcessBuilder().command("chmod", "+x", dex2jar.absolutePath).start().waitFor()
+    }
+
     total.forEach { file ->
-        val cmd = """
-            "${dex2jar.absolutePath}"
-             --force
-             -o "${output.resolve(file.relativeTo(input)).apply { parentFile.mkdirs() }.run { resolveSibling("$nameWithoutExtension.jar") }.absolutePath}"
-             "${file.absolutePath}"
-             """.trimIndent().replace('\n', ' ')
+        val cmd = listOf(dex2jar.absolutePath,
+            "--force",
+            "-o",
+            output.resolve(file.relativeTo(input))
+                .apply { parentFile.mkdirs() }
+                .run { resolveSibling("$nameWithoutExtension.jar") }
+                .absolutePath,
+            file.absolutePath
+        )
 
         launch {
             semaphore.withPermit {
