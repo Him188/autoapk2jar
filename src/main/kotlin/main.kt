@@ -21,7 +21,7 @@ private val isWindows by lazy {
     System.getProperty("os.name").contains("windows", ignoreCase = true)
 }
 
-private const val DEX2JAR_THREAD_COUNT = 5
+private var DEX2JAR_THREAD_COUNT = 5
 
 suspend fun impl(args: Array<String>) {
     val apkFile = args.getOrElse(0) {
@@ -35,6 +35,13 @@ suspend fun impl(args: Array<String>) {
         readlnOrNull()
     }.let { dir ->
         (if (dir.isNullOrBlank()) defaultOutputDir else File(dir)).apply { mkdirs() }
+    }
+
+    DEX2JAR_THREAD_COUNT = args.getOrElse(2) {
+        println("dex2jar thread count? default: 5")
+        readlnOrNull()
+    }.let {
+        if (it.isNullOrBlank()) 5 else it.toInt()
     }
 
     println("Output dir: ${output.absolutePath}")
