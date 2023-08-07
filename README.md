@@ -5,7 +5,7 @@ Converts apk to jar then decompile using fernflower and finally creates a gradle
 ## Usage
 ```bash
 ./gradlew installDist
-/install/autoapk2jar/bin/autoapk2jar
+./install/autoapk2jar/bin/autoapk2jar
 ```
 
 ## Version
