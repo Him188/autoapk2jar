@@ -1,17 +1,16 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "1.4.21"
+    kotlin("jvm") version "1.8.20"
     application
 }
 
 group = "me.him188"
-version = "0.3.0"
+version = "0.4.0"
 
 repositories {
     mavenLocal()
     mavenCentral()
-    jcenter()
     maven { url = uri("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev") }
 }
 
@@ -28,6 +27,4 @@ tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "1.8"
 }
 
-application {
-    mainClassName = "MainKt"
-}
+project.setProperty("mainClassName", "MainKt")
